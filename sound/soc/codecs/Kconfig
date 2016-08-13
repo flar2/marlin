@@ -879,4 +879,8 @@ config SND_SOC_TFA98XX
 	default y
 #HTC_AUD_END
 
+config SOUND_CONTROL
+	bool "Sound control for wcd9335"
+
+
 endmenu
