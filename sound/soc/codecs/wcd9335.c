@@ -161,6 +161,23 @@ static char on_demand_supply_name[][MAX_ON_DEMAND_SUPPLY_NAME_LENGTH] = {
 	"cdc-vdd-mic-bias",
 };
 
+static int enable_compander = 1;
+
+static int __init set_compander(char *compander)
+{
+	unsigned long input;
+	int ret;
+
+	ret = kstrtoul(compander, 0, &input);
+	if (ret)
+		return -EINVAL;
+
+	enable_compander = input;
+
+	return ret;
+}
+__setup("compander=", set_compander);
+
 enum {
 	POWER_COLLAPSE,
 	POWER_RESUME,
@@ -3413,7 +3430,7 @@ static int tasha_set_compander(struct snd_kcontrol *kcontrol,
 
 #ifdef CONFIG_SOUND_CONTROL
 	if (comp == COMPANDER_1 || comp == COMPANDER_2)
-		value = 0;
+		value = enable_compander;
 #endif
 
 	pr_debug("%s: Compander %d enable current %d, new %d\n",
@@ -13391,6 +13408,9 @@ static int tasha_codec_probe(struct snd_soc_codec *codec)
         if (ret) {
 		pr_warn("%s sysfs file create failed!\n", __func__);
 	}
+
+	if (enable_compander)
+		sysfs_remove_file(sound_control_kobj, &headphone_pa_gain_attribute.attr);
 #endif
 
 	return ret;
