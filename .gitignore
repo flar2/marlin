@@ -89,6 +89,7 @@ GTAGS
 out/*
 *.orig
 *~
+ipa_common
 \#*#
 
 #
