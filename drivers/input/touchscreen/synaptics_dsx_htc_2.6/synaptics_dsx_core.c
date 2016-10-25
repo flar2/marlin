@@ -56,7 +56,7 @@
 #define TYPE_B_PROTOCOL
 #endif
 
-#define WAKEUP_GESTURE false
+#define WAKEUP_GESTURE true
 
 #define NO_0D_WHILE_2D
 #define REPORT_2D_Z
@@ -1431,10 +1431,10 @@ static ssize_t synaptics_rmi4_virtual_key_map_show(struct kobject *kobj,
 }
 
 #ifdef HTC_FEATURE
-static void report_wake_event(struct synaptics_rmi4_data *rmi4_data)
+/*static void report_wake_event(struct synaptics_rmi4_data *rmi4_data)
 {
 	sysfs_notify(&rmi4_data->input_dev->dev.kobj, NULL, "wake_event");
-}
+}*/
 
 static unsigned short synaptics_sqrt(unsigned int num)
 {
@@ -1746,8 +1746,8 @@ static int synaptics_rmi4_f12_abs_report(struct synaptics_rmi4_data *rmi4_data,
 			dev_info(rmi4_data->pdev->dev.parent, "%s, Double-Tap wake up\n",
 					__func__);
 #ifdef HTC_FEATURE
-			report_wake_event(rmi4_data);
-#else
+//			report_wake_event(rmi4_data);
+//#else
 			input_report_key(rmi4_data->input_dev, KEY_WAKEUP, 1);
 			input_sync(rmi4_data->input_dev);
 			input_report_key(rmi4_data->input_dev, KEY_WAKEUP, 0);
@@ -5375,6 +5375,7 @@ static int synaptics_rmi4_probe(struct platform_device *pdev)
 
 	rmi4_data->irq_enabled = true;
 
+	rmi4_data->enable_wakeup_gesture = true;
 	if (rmi4_data->enable_wakeup_gesture)
 		irq_set_irq_wake(rmi4_data->irq, 1);
 #endif
