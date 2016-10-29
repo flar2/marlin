@@ -6035,7 +6035,7 @@ static int synaptics_rmi4_resume(struct device *dev)
 	synaptics_rmi4_free_fingers(rmi4_data);
 
 #ifdef CONFIG_WAKE_GESTURES
-	if (s2w_switch || dt2w_switch) {
+	if (s2w_switch || rmi4_data->enable_wakeup_gesture) {
 		if (!s2w_switch)
 			synaptics_rmi4_wakeup_gesture(rmi4_data, false);
 #else
