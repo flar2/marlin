@@ -485,7 +485,7 @@ enum aicl_short_deglitch_voters {
 	HVDCP_SHORT_DEGLITCH_VOTER,
 	NUM_HW_SHORT_DEGLITCH_VOTERS,
 };
-static int smbchg_debug_mask;
+static int smbchg_debug_mask = 0;
 module_param_named(
 	debug_mask, smbchg_debug_mask, int, S_IRUSR | S_IWUSR
 );
@@ -9684,7 +9684,7 @@ void smbchg_dump_reg(void)
 	smbchg_read(the_chip, misc_cfg, the_chip->misc_base + 0xF0, 8);
 	smbchg_read(the_chip, (misc_cfg + 8), the_chip->misc_base + 0xF8, 8);
 
-	printk(KERN_INFO "[BATT][SMBCHG] CHG_STS[0B:0F]=[%02x,%02x,%02x,%02x,%02x],"
+	pr_debug("[BATT][SMBCHG] CHG_STS[0B:0F]=[%02x,%02x,%02x,%02x,%02x],"
 		"CHG_CFG[F0:F4]=[%02x,%02x,%02x,%02x,%02x],"
 		"CHG_CFG[F5:F9]=[%02x,%02x,%02x,%02x,%02x],"
 		"CHG_CFG[FA:FF]=[%02x,%02x,%02x,%02x,%02x,%02x],"
@@ -9700,7 +9700,7 @@ void smbchg_dump_reg(void)
 		batif_cfg[0], batif_cfg[1], batif_cfg[2], batif_cfg[3], batif_cfg[4], batif_cfg[5],
 		batif_cfg[6], batif_cfg[7], batif_cfg[8], batif_cfg[9], batif_cfg[10], batif_cfg[11]);
 
-	printk(KERN_INFO "[BATT][SMBCHG] USB_STS[07:0B]=[%02x,%02x,%02x,%02x,%02x],"
+	pr_debug("[BATT][SMBCHG] USB_STS[07:0B]=[%02x,%02x,%02x,%02x,%02x],"
 		"USB_STS[0C:0F]=[%02x,%02x,%02x,%02x],"
 		"USB_CFG[F0:F5]=[%02x,%02x,%02x,%02x,%02x,%02x],"
 		"MISC_CFG[F0:F4]=[%02x,%02x,%02x,%02x,%02x],"
@@ -9789,7 +9789,7 @@ int charger_dump_all(void)
 	wake_reason = the_chip->wake_reasons;
 	smb_current = (pmi8996_get_smb_out_isen() * 2) / 1000;
 
-	printk(KERN_INFO "[BATT][SMBCHG] "
+	pr_debug("[BATT][SMBCHG] "
 		"0x1010=%02x,0x1210=%02x,0x1242=%02x,0x1310=%02x,0x1340=%02x,0x1608=%02x,0x1610=%02x,"
 		"cc=%duAh,warm_temp=%d,cool_temp=%d,pmic=rev%d.%d,sink_current=%d,pd_chgr=%d,"
 		"wake_reason=%d,smb_curr=%dmA\n",
@@ -10303,7 +10303,7 @@ static int smbchg_probe(struct spmi_device *spmi)
 		smbchg_debug_mask = 0xFF;
 	else
 		smbchg_debug_mask = 0x06;
-	printk("smbchg_debug_mask=0x%X\n",smbchg_debug_mask);
+	pr_debug("smbchg_debug_mask=0x%X\n",smbchg_debug_mask);
 #endif /* CONFIG_HTC_BATT */
 
 	rerun_hvdcp_det_if_necessary(chip);
