@@ -8041,9 +8041,11 @@ static const struct snd_kcontrol_new tasha_snd_controls[] = {
 	SOC_SINGLE_SX_TLV("RX8 Digital Volume", WCD9335_CDC_RX8_RX_VOL_CTL,
 		0, -84, 40, digital_gain),
 
+#ifndef CONFIG_SOUND_CONTROL
 	SOC_SINGLE_SX_TLV("RX0 Mix Digital Volume",
 			  WCD9335_CDC_RX0_RX_VOL_MIX_CTL,
 			  0, -84, 40, digital_gain), /* -84dB min - 40dB max */
+#endif
 	SOC_SINGLE_SX_TLV("RX1 Mix Digital Volume",
 			  WCD9335_CDC_RX1_RX_VOL_MIX_CTL,
 			  0, -84, 40, digital_gain), /* -84dB min - 40dB max */
@@ -13153,7 +13155,7 @@ static ssize_t earpiece_gain_store(struct kobject *kobj,
 	return count;
 }
 
-static struct kobj_attribute mic_gain_attribute =
+static struct kobj_attribute earpiece_gain_attribute =
 	__ATTR(earpiece_gain, 0664,
 		earpiece_gain_show,
 		earpiece_gain_store);
