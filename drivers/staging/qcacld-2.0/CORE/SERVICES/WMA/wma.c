@@ -2241,6 +2241,12 @@ static int wma_vdev_stop_ind(tp_wma_handle wma, u_int8_t *buf)
 			goto free_req_msg;
 		}
 
+		/* Clear arp and ns offload cache */
+		vos_mem_zero(&iface->ns_offload_req,
+			sizeof(iface->ns_offload_req));
+		vos_mem_zero(&iface->arp_offload_req,
+			sizeof(iface->arp_offload_req));
+
 #ifdef QCA_IBSS_SUPPORT
 		if ( wma_is_vdev_in_ibss_mode(wma, resp_event->vdev_id))
 			wma_delete_all_ibss_peers(wma, resp_event->vdev_id);
@@ -21136,7 +21142,7 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 
 	WMA_LOGD("wow_buf_pkt_len: %u", buf_len);
 	if (buf_len >= ADF_NBUF_TRAC_IPV4_OFFSET)
-		WMA_LOGE("Src_mac: " MAC_ADDRESS_STR " Dst_mac: " MAC_ADDRESS_STR,
+		WMA_LOGE("SA: " MAC_ADDRESS_STR " DA: " MAC_ADDRESS_STR,
 			MAC_ADDR_ARRAY(data + ADF_NBUF_SRC_MAC_OFFSET),
 			MAC_ADDR_ARRAY(data));
 	else
@@ -21148,7 +21154,7 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 	case ADF_PROTO_EAPOL_M2:
 	case ADF_PROTO_EAPOL_M3:
 	case ADF_PROTO_EAPOL_M4:
-		WMA_LOGE("WOW Wakeup: %s rcvd",
+		WMA_LOGE("WOW %s rcvd",
 			wma_pkt_proto_subtype_to_string(proto_subtype));
 		if (buf_len >= WMA_EAPOL_INFO_GET_MIN_LEN) {
 			pkt_len = (uint16_t)(*(uint16_t *)(data +
@@ -21169,7 +21175,7 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 	case ADF_PROTO_DHCP_RELEASE:
 	case ADF_PROTO_DHCP_INFORM:
 	case ADF_PROTO_DHCP_DECLINE:
-		WMA_LOGE("WOW Wakeup: %s rcvd",
+		WMA_LOGE("WOW %s rcvd",
 			wma_pkt_proto_subtype_to_string(proto_subtype));
 		if (buf_len >= WMA_DHCP_INFO_GET_MIN_LEN) {
 			pkt_len = (uint16_t)(*(uint16_t *)(data +
@@ -21184,13 +21190,13 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 
 	case ADF_PROTO_ARP_REQ:
 	case ADF_PROTO_ARP_RES:
-		WMA_LOGE("WOW Wakeup: %s rcvd",
+		WMA_LOGE("WOW %s rcvd",
 			wma_pkt_proto_subtype_to_string(proto_subtype));
 		break;
 
 	case ADF_PROTO_ICMP_REQ:
 	case ADF_PROTO_ICMP_RES:
-		WMA_LOGE("WOW Wakeup: %s rcvd",
+		WMA_LOGE("WOW %s rcvd",
 			wma_pkt_proto_subtype_to_string(proto_subtype));
 		if (buf_len >= WMA_IPV4_PKT_INFO_GET_MIN_LEN) {
 			pkt_len = (uint16_t)(*(uint16_t *)(data +
@@ -21205,14 +21211,14 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 
 	case ADF_PROTO_ICMPV6_REQ:
 	case ADF_PROTO_ICMPV6_RES:
-		WMA_LOGE("WOW Wakeup: %s rcvd",
+		WMA_LOGE("WOW %s rcvd",
 			wma_pkt_proto_subtype_to_string(proto_subtype));
 		if (buf_len >= WMA_IPV6_PKT_INFO_GET_MIN_LEN) {
 			pkt_len = (uint16_t)(*(uint16_t *)(data +
 				IPV6_PKT_LEN_OFFSET));
 			seq_num = (uint16_t)(*(uint16_t *)(data +
 				ICMPV6_SEQ_NUM_OFFSET));
-			WMA_LOGE("Pkt_len: %u, Seq_num: %u",
+			WMA_LOGE("len: %u, SN: %u",
 				adf_os_cpu_to_be16(pkt_len),
 				adf_os_cpu_to_be16(seq_num));
 		}
@@ -21220,7 +21226,7 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 
 	case ADF_PROTO_IPV4_UDP:
 	case ADF_PROTO_IPV4_TCP:
-		WMA_LOGE("WOW Wakeup: %s rcvd",
+		WMA_LOGE("WOW %s rcvd",
 			wma_pkt_proto_subtype_to_string(proto_subtype));
 		if (buf_len >= WMA_IPV4_PKT_INFO_GET_MIN_LEN) {
 			pkt_len = (uint16_t)(*(uint16_t *)(data +
@@ -21229,15 +21235,14 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 				IPV4_SRC_PORT_OFFSET));
 			dst_port = (uint16_t)(*(uint16_t *)(data +
 				IPV4_DST_PORT_OFFSET));
-			WMA_LOGE("Pkt_len: %u",
-				adf_os_cpu_to_be16(pkt_len));
-			WMA_LOGE("src_port: %u, dst_port: %u",
+			WMA_LOGE("len: %u sport: %u dport: %u",
+				adf_os_cpu_to_be16(pkt_len),
 				adf_os_cpu_to_be16(src_port),
 				adf_os_cpu_to_be16(dst_port));
 			if (proto_subtype == ADF_PROTO_IPV4_TCP) {
 				tcp_seq_num = (uint32_t)(*(uint32_t *)(data +
 					IPV4_TCP_SEQ_NUM_OFFSET));
-				WMA_LOGE("TCP_seq_num: %u",
+				WMA_LOGD("TCP SN: %u",
 					adf_os_cpu_to_be32(tcp_seq_num));
 			}
 		}
@@ -21245,7 +21250,7 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 
 	case ADF_PROTO_IPV6_UDP:
 	case ADF_PROTO_IPV6_TCP:
-		WMA_LOGE("WOW Wakeup: %s rcvd",
+		WMA_LOGE("WOW %s rcvd",
 			wma_pkt_proto_subtype_to_string(proto_subtype));
 		if (buf_len >= WMA_IPV6_PKT_INFO_GET_MIN_LEN) {
 			pkt_len = (uint16_t)(*(uint16_t *)(data +
@@ -21254,15 +21259,14 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 				IPV6_SRC_PORT_OFFSET));
 			dst_port = (uint16_t)(*(uint16_t *)(data +
 				IPV6_DST_PORT_OFFSET));
-			WMA_LOGE("Pkt_len: %u",
-				adf_os_cpu_to_be16(pkt_len));
-			WMA_LOGE("src_port: %u, dst_port: %u",
+			WMA_LOGE("len: %u sport: %u dport: %u",
+				adf_os_cpu_to_be16(pkt_len),
 				adf_os_cpu_to_be16(src_port),
 				adf_os_cpu_to_be16(dst_port));
 			if (proto_subtype == ADF_PROTO_IPV6_TCP) {
 				tcp_seq_num = (uint32_t)(*(uint32_t *)(data +
 					IPV6_TCP_SEQ_NUM_OFFSET));
-				WMA_LOGE("TCP_seq_num: %u",
+				WMA_LOGD("TCP SN: %u",
 					adf_os_cpu_to_be32(tcp_seq_num));
 			}
 		}
@@ -21270,8 +21274,7 @@ static void wma_wow_parse_data_pkt_buffer(uint8_t *data,
 
 	default:
 end:
-		WMA_LOGE("wow_buf_pkt_len: %u", buf_len);
-		WMA_LOGE("Unknown Packet or Insufficient packet buffer");
+		WMA_LOGE("Unknown Packet or Insufficient packet buffer (len=%u)", buf_len);
 		break;
 	}
 }
@@ -21407,12 +21410,10 @@ static int wma_wow_wakeup_host_event(void *handle, u_int8_t *event,
 
 	wake_info = param_buf->fixed_param;
 
-	if ((wake_info->wake_reason != WOW_REASON_UNSPECIFIED) ||
-	    (wake_info->wake_reason == WOW_REASON_UNSPECIFIED &&
-	     !wmi_get_runtime_pm_inprogress(wma->wmi_handle)))
-		WMA_LOGA("WOW wakeup host event received (reason: %s(%d)) for vdev %d",
-			wma_wow_wake_reason_str(wake_info->wake_reason, wma),
+	if (!wmi_get_runtime_pm_inprogress(wma->wmi_handle))
+		WMA_LOGA("WOW (%d) %s vdev:%d",
 			wake_info->wake_reason,
+			wma_wow_wake_reason_str(wake_info->wake_reason, wma),
 			wake_info->vdev_id);
 
 	vos_event_set(&wma->wma_resume_event);
@@ -24604,8 +24605,12 @@ static VOS_STATUS wma_process_mcbc_set_filter_req(tp_wma_handle wma_handle,
 	uint8_t vdev_id = 0;
 	int i;
 
-	if(mcbc_param->ulMulticastAddrCnt <= 0) {
-		WMA_LOGW("Number of multicast addresses is 0");
+	if (mcbc_param->ulMulticastAddrCnt <= 0 ||
+		mcbc_param->ulMulticastAddrCnt >
+			CFG_TGT_MAX_MULTICAST_FILTER_ENTRIES) {
+		WMA_LOGE("Number of multicast addresses is: %u",
+				mcbc_param->ulMulticastAddrCnt);
+		WARN_ON(1);
 		return VOS_STATUS_E_FAILURE;
 	}
 
@@ -24782,208 +24787,322 @@ out:
 }
 #endif
 
-/*
- * Function	:	wma_enable_arp_ns_offload
- * Description	:	To configure ARP NS off load data to firmware
- *			when target goes to wow mode.
- * Args		:	@wma - wma handle, @tpSirHostOffloadReq -
- *			pHostOffloadParams,@bool bArpOnly
- * Returns	:	Returns Failure or Success based on WMI cmd.
- * Comments	:	Since firware expects ARP and NS to be configured
- *			at a time, Arp info is cached in wma and send along
- *			with NS info to make both work.
+/**
+ * wma_fill_arp_offload_params() - Fill ARP offload data
+ * @wma: wma handle
+ * @tpSirHostOffloadReq: offload request
+ * @buf_ptr: buffer pointer
+ *
+ * To fill ARP offload data to firmware
+ * when target goes to wow mode.
+ *
+ * Return: None
  */
-static VOS_STATUS wma_enable_arp_ns_offload(tp_wma_handle wma, tpSirHostOffloadReq pHostOffloadParams, bool bArpOnly)
+static void wma_fill_arp_offload_params(tp_wma_handle wma,
+		tpSirHostOffloadReq hostoffloadreq, uint8_t **buf_ptr)
+{
+
+	int32_t i;
+	WMI_ARP_OFFLOAD_TUPLE *arp_tuple;
+	bool enableOrDisable = hostoffloadreq->enableOrDisable;
+
+	WMITLV_SET_HDR(*buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		(WMI_MAX_ARP_OFFLOADS*sizeof(WMI_ARP_OFFLOAD_TUPLE)));
+	*buf_ptr += WMI_TLV_HDR_SIZE;
+	for (i = 0; i < WMI_MAX_ARP_OFFLOADS; i++) {
+		arp_tuple = (WMI_ARP_OFFLOAD_TUPLE *)*buf_ptr;
+		WMITLV_SET_HDR(&arp_tuple->tlv_header,
+			WMITLV_TAG_STRUC_WMI_ARP_OFFLOAD_TUPLE,
+			WMITLV_GET_STRUCT_TLVLEN(WMI_ARP_OFFLOAD_TUPLE));
+
+		/* Fill data for ARP and NS in the first tupple for LA */
+		if ((enableOrDisable & SIR_OFFLOAD_ENABLE) && (i == 0)) {
+			/* Copy the target ip addr and flags */
+			arp_tuple->flags = WMI_ARPOFF_FLAGS_VALID;
+			A_MEMCPY(&arp_tuple->target_ipaddr,
+					hostoffloadreq->params.hostIpv4Addr,
+					SIR_IPV4_ADDR_LEN);
+			WMA_LOGD("ARPOffload IP4 address: %pI4",
+					hostoffloadreq->params.hostIpv4Addr);
+		}
+		*buf_ptr += sizeof(WMI_ARP_OFFLOAD_TUPLE);
+	}
+}
+
+#ifdef WLAN_NS_OFFLOAD
+/**
+ * wma_fill_ns_offload_params() - Fill NS offload data
+ * @wma: wma handle
+ * @tpSirHostOffloadReq: offload request
+ * @buf_ptr: buffer pointer
+ *
+ * To fill NS offload data to firmware
+ * when target goes to wow mode.
+ *
+ * Return: None
+ */
+static void wma_fill_ns_offload_params(tp_wma_handle wma,
+		tpSirHostOffloadReq hostoffloadreq, uint8_t **buf_ptr)
+{
+
+	int32_t i;
+	WMI_NS_OFFLOAD_TUPLE *ns_tuple;
+	tSirNsOffloadReq ns_req;
+
+	ns_req = hostoffloadreq->nsOffloadInfo;
+	WMITLV_SET_HDR(*buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		(WMI_MAX_NS_OFFLOADS*sizeof(WMI_NS_OFFLOAD_TUPLE)));
+	*buf_ptr += WMI_TLV_HDR_SIZE;
+	for (i = 0; i < WMI_MAX_NS_OFFLOADS; i++) {
+		ns_tuple = (WMI_NS_OFFLOAD_TUPLE *)*buf_ptr;
+		WMITLV_SET_HDR(&ns_tuple->tlv_header,
+			WMITLV_TAG_STRUC_WMI_NS_OFFLOAD_TUPLE,
+			(sizeof(WMI_NS_OFFLOAD_TUPLE) - WMI_TLV_HDR_SIZE));
+
+		/*
+		 * Fill data only for NS offload in the first ARP tuple for LA
+		 */
+		if ((hostoffloadreq->enableOrDisable & SIR_OFFLOAD_ENABLE)) {
+			ns_tuple->flags |= WMI_NSOFF_FLAGS_VALID;
+			/* Copy the target/solicitation/remote ip addr */
+			if (ns_req.targetIPv6AddrValid[i])
+				A_MEMCPY(&ns_tuple->target_ipaddr[0],
+					&ns_req.targetIPv6Addr[i],
+					sizeof(WMI_IPV6_ADDR));
+			A_MEMCPY(&ns_tuple->solicitation_ipaddr,
+				&ns_req.selfIPv6Addr[i],
+				sizeof(WMI_IPV6_ADDR));
+			if (ns_req.target_ipv6_addr_type[i]) {
+				ns_tuple->flags |=
+					WMI_NSOFF_FLAGS_IS_IPV6_ANYCAST;
+			}
+			WMA_LOGD("Index %d NS solicitedIp %pI6, targetIp %pI6",
+				i, &ns_req.selfIPv6Addr[i],
+				&ns_req.targetIPv6Addr[i]);
+
+			/* target MAC is optional, check if it is valid,
+			 * if this is not valid, the target will use the known
+			 * local MAC address rather than the tuple
+			 */
+			WMI_CHAR_ARRAY_TO_MAC_ADDR(
+				ns_req.selfMacAddr,
+				&ns_tuple->target_mac);
+			if ((ns_tuple->target_mac.mac_addr31to0 != 0) ||
+				(ns_tuple->target_mac.mac_addr47to32 != 0)) {
+				ns_tuple->flags |= WMI_NSOFF_FLAGS_MAC_VALID;
+			}
+		}
+		*buf_ptr += sizeof(WMI_NS_OFFLOAD_TUPLE);
+	}
+}
+
+
+/**
+ * wma_fill_nsoffload_ext() - Fill NS offload ext data
+ * @wma: wma handle
+ * @tpSirHostOffloadReq: offload request
+ * @buf_ptr: buffer pointer
+ *
+ * To fill extended NS offload extended data to firmware
+ * when target goes to wow mode.
+ *
+ * Return: None
+ */
+static void wma_fill_nsoffload_ext(tp_wma_handle wma, tpSirHostOffloadReq
+				   hostoffloadreq, uint8_t **buf_ptr)
 {
 	int32_t i;
+	WMI_NS_OFFLOAD_TUPLE *ns_tuple;
+	uint32_t count, num_ns_ext_tuples;
+	tSirNsOffloadReq ns_req;
+
+	ns_req = hostoffloadreq->nsOffloadInfo;
+	count = hostoffloadreq->num_ns_offload_count;
+	num_ns_ext_tuples = hostoffloadreq->num_ns_offload_count -
+		WMI_MAX_NS_OFFLOADS;
+
+	/* Populate extended NS offload tuples */
+	WMITLV_SET_HDR(*buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		(num_ns_ext_tuples * sizeof(WMI_NS_OFFLOAD_TUPLE)));
+	*buf_ptr += WMI_TLV_HDR_SIZE;
+	for (i = WMI_MAX_NS_OFFLOADS; i < count; i++) {
+		ns_tuple = (WMI_NS_OFFLOAD_TUPLE *)*buf_ptr;
+		WMITLV_SET_HDR(&ns_tuple->tlv_header,
+			WMITLV_TAG_STRUC_WMI_NS_OFFLOAD_TUPLE,
+			(sizeof(WMI_NS_OFFLOAD_TUPLE)-WMI_TLV_HDR_SIZE));
+
+		/*
+		 * Fill data only for NS offload in the first ARP tuple for LA
+		 */
+		if ((hostoffloadreq->enableOrDisable & SIR_OFFLOAD_ENABLE)) {
+			ns_tuple->flags |= WMI_NSOFF_FLAGS_VALID;
+			/* Copy the target/solicitation/remote ip addr */
+			if (ns_req.targetIPv6AddrValid[i])
+				A_MEMCPY(&ns_tuple->target_ipaddr[0],
+					&ns_req.targetIPv6Addr[i],
+					sizeof(WMI_IPV6_ADDR));
+			A_MEMCPY(&ns_tuple->solicitation_ipaddr,
+				&ns_req.selfIPv6Addr[i],
+				sizeof(WMI_IPV6_ADDR));
+			if (ns_req.target_ipv6_addr_type[i]) {
+				ns_tuple->flags |=
+					WMI_NSOFF_FLAGS_IS_IPV6_ANYCAST;
+			}
+			WMA_LOGD("Index %d NS solicitedIp %pI6, targetIp %pI6",
+				i, &ns_req.selfIPv6Addr[i],
+				&ns_req.targetIPv6Addr[i]);
+
+			/* target MAC is optional, check if it is valid,
+			 * if this is not valid, the target will use the
+			 * known local MAC address rather than the tuple
+			 */
+			 WMI_CHAR_ARRAY_TO_MAC_ADDR(
+				ns_req.selfMacAddr,
+				&ns_tuple->target_mac);
+			if ((ns_tuple->target_mac.mac_addr31to0 != 0) ||
+				(ns_tuple->target_mac.mac_addr47to32 != 0)) {
+				ns_tuple->flags |= WMI_NSOFF_FLAGS_MAC_VALID;
+			}
+		}
+		*buf_ptr += sizeof(WMI_NS_OFFLOAD_TUPLE);
+	}
+}
+#else
+static inline void wma_fill_ns_offload_params(tp_wma_handle wma,
+		tpSirHostOffloadReq hostoffloadreq, uint8_t **buf_ptr)
+{
+	return;
+}
+
+static inline void wma_fill_nsoffload_ext(tp_wma_handle wma,
+	tpSirHostOffloadReq hostoffloadreq, uint8_t **buf_ptr)
+{
+	return;
+}
+#endif
+
+
+/**
+ * wma_enable_arp_ns_offload() - enable ARP NS offload
+ * @wma: wma handle
+ * @tpSirHostOffloadReq: offload request
+ * @config_arp: flag
+ *
+ * To configure ARP NS off load data to firmware
+ * when target goes to wow mode.
+ *
+ * Return: VOS Status
+ */
+static VOS_STATUS wma_enable_arp_ns_offload(tp_wma_handle wma,
+			tpSirHostOffloadReq hostoffloadreq, bool config_arp)
+{
 	int32_t res;
 	WMI_SET_ARP_NS_OFFLOAD_CMD_fixed_param *cmd;
-	WMI_NS_OFFLOAD_TUPLE *ns_tuple;
-	WMI_ARP_OFFLOAD_TUPLE *arp_tuple;
 	A_UINT8* buf_ptr;
 	wmi_buf_t buf;
 	int32_t len;
+	VOS_STATUS status = VOS_STATUS_SUCCESS;
 	u_int8_t vdev_id;
+	tpSirHostOffloadReq ns_offload_req;
+	tpSirHostOffloadReq arp_offload_req;
 	uint32_t count = 0, num_ns_ext_tuples = 0;
 
 	/* Get the vdev id */
-	if (!wma_find_vdev_by_bssid(wma, pHostOffloadParams->bssId, &vdev_id)) {
-		WMA_LOGE("vdev handle is invalid for %pM", pHostOffloadParams->bssId);
-		vos_mem_free(pHostOffloadParams);
-		return VOS_STATUS_E_INVAL;
+	if (!wma_find_vdev_by_bssid(wma, hostoffloadreq->bssId, &vdev_id)) {
+		WMA_LOGE("Invalid vdev handle for %pM", hostoffloadreq->bssId);
+		status = VOS_STATUS_E_FAILURE;
+		goto err_vdev;
 	}
 
 	if (!wma->interfaces[vdev_id].vdev_up) {
-
 		WMA_LOGE("vdev %d is not up skipping arp/ns offload", vdev_id);
-		vos_mem_free(pHostOffloadParams);
-		return VOS_STATUS_E_FAILURE;
+		status = VOS_STATUS_E_FAILURE;
+		goto err_vdev;
 	}
 
-	if (!bArpOnly)
-		count = pHostOffloadParams->num_ns_offload_count;
+	/*
+	 * config_arp is true means arp request comes from upper layer
+	 * Hence ns request need to used from wma cached request.
+	 */
+	if (config_arp) {
+		arp_offload_req = hostoffloadreq;
+		ns_offload_req = &wma->interfaces[vdev_id].ns_offload_req;
+		count = ns_offload_req->num_ns_offload_count;
+	} else {
+		ns_offload_req = hostoffloadreq;
+		arp_offload_req = &wma->interfaces[vdev_id].arp_offload_req;
+		count = hostoffloadreq->num_ns_offload_count;
+	}
 
 	len = sizeof(WMI_SET_ARP_NS_OFFLOAD_CMD_fixed_param) +
-		WMI_TLV_HDR_SIZE + // TLV place holder size for array of NS tuples
+		WMI_TLV_HDR_SIZE + /* Add size for array of NS tuples */
 		WMI_MAX_NS_OFFLOADS*sizeof(WMI_NS_OFFLOAD_TUPLE) +
-		WMI_TLV_HDR_SIZE + // TLV place holder size for array of ARP tuples
+		WMI_TLV_HDR_SIZE + /* Add size for array of ARP tuples */
 		WMI_MAX_ARP_OFFLOADS*sizeof(WMI_ARP_OFFLOAD_TUPLE);
 
-	/*
-	 * If there are more than WMI_MAX_NS_OFFLOADS addresses then allocate
-	 * extra length for extended NS offload tuples which follows ARP offload
-	 * tuples. Host needs to fill this structure in following format:
-	 * 2 NS ofload tuples
-	 * 2 ARP offload tuples
-	 * N numbers of extended NS offload tuples if HDD has given more than
-	 * 2 NS offload addresses
-	 */
-	if (!bArpOnly && count > WMI_MAX_NS_OFFLOADS) {
+	if (count > WMI_MAX_NS_OFFLOADS) {
 		num_ns_ext_tuples = count - WMI_MAX_NS_OFFLOADS;
-		len += WMI_TLV_HDR_SIZE + num_ns_ext_tuples *
-					sizeof(WMI_NS_OFFLOAD_TUPLE);
+		len += WMI_TLV_HDR_SIZE + num_ns_ext_tuples
+			   * sizeof(WMI_NS_OFFLOAD_TUPLE);
 	}
 
 	buf = wmi_buf_alloc(wma->wmi_handle, len);
 	if (!buf) {
 		WMA_LOGE("%s: wmi_buf_alloc failed", __func__);
-		vos_mem_free(pHostOffloadParams);
-		return VOS_STATUS_E_NOMEM;
+		status = VOS_STATUS_E_NOMEM;
+		goto err_vdev;
 	}
 
 	buf_ptr = (A_UINT8*)wmi_buf_data(buf);
+
 	cmd = (WMI_SET_ARP_NS_OFFLOAD_CMD_fixed_param *)buf_ptr;
 	WMITLV_SET_HDR(&cmd->tlv_header,
-			WMITLV_TAG_STRUC_WMI_SET_ARP_NS_OFFLOAD_CMD_fixed_param,
-			WMITLV_GET_STRUCT_TLVLEN(WMI_SET_ARP_NS_OFFLOAD_CMD_fixed_param));
+		WMITLV_TAG_STRUC_WMI_SET_ARP_NS_OFFLOAD_CMD_fixed_param,
+		WMITLV_GET_STRUCT_TLVLEN(
+		WMI_SET_ARP_NS_OFFLOAD_CMD_fixed_param));
 	cmd->flags = 0;
 	cmd->vdev_id = vdev_id;
-	if (!bArpOnly)
-		cmd->num_ns_ext_tuples = num_ns_ext_tuples;
-
-	WMA_LOGD("ARP NS Offload vdev_id: %d",cmd->vdev_id);
-
-	/* Have copy of arp info to send along with NS, Since FW expects
-	 * both ARP and NS info in single cmd */
-	if(bArpOnly)
-		vos_mem_copy(&wma->mArpInfo, pHostOffloadParams, sizeof(tSirHostOffloadReq));
+	cmd->num_ns_ext_tuples = num_ns_ext_tuples;
 
 	buf_ptr += sizeof(WMI_SET_ARP_NS_OFFLOAD_CMD_fixed_param);
-	WMITLV_SET_HDR(buf_ptr,WMITLV_TAG_ARRAY_STRUC,(WMI_MAX_NS_OFFLOADS*sizeof(WMI_NS_OFFLOAD_TUPLE)));
-	buf_ptr += WMI_TLV_HDR_SIZE;
-	for(i = 0; i < WMI_MAX_NS_OFFLOADS; i++ ){
-		ns_tuple = (WMI_NS_OFFLOAD_TUPLE *)buf_ptr;
-		WMITLV_SET_HDR(&ns_tuple->tlv_header,
-				WMITLV_TAG_STRUC_WMI_NS_OFFLOAD_TUPLE,
-				(sizeof(WMI_NS_OFFLOAD_TUPLE)-WMI_TLV_HDR_SIZE));
+	if (config_arp)
+		WMA_LOGD(" %s: ARP Offload vdev_id: %d enable: %d ns_count: %u",
+			__func__, cmd->vdev_id,
+			hostoffloadreq->enableOrDisable,
+			hostoffloadreq->num_ns_offload_count);
+	else
+		WMA_LOGD(" %s: NS Offload vdev_id: %d enable: %d ns_count: %u",
+			__func__, cmd->vdev_id,
+			hostoffloadreq->enableOrDisable,
+			hostoffloadreq->num_ns_offload_count);
 
-		/* Fill data only for NS offload in the first ARP tuple for LA */
-		if (!bArpOnly  &&
-		   ((pHostOffloadParams->enableOrDisable & SIR_OFFLOAD_ENABLE))) {
-			ns_tuple->flags |= WMI_NSOFF_FLAGS_VALID;
+	wma_fill_ns_offload_params(wma, ns_offload_req, &buf_ptr);
+	wma_fill_arp_offload_params(wma, arp_offload_req, &buf_ptr);
+	if (count > WMI_MAX_NS_OFFLOADS)
+		wma_fill_nsoffload_ext(wma, ns_offload_req, &buf_ptr);
 
-#ifdef WLAN_NS_OFFLOAD
-			/*Copy the target/solicitation/remote ip addr */
-			if(pHostOffloadParams->nsOffloadInfo.targetIPv6AddrValid[i])
-				A_MEMCPY(&ns_tuple->target_ipaddr[0],
-				&pHostOffloadParams->nsOffloadInfo.targetIPv6Addr[i], sizeof(WMI_IPV6_ADDR));
-			A_MEMCPY(&ns_tuple->solicitation_ipaddr,
-				&pHostOffloadParams->nsOffloadInfo.selfIPv6Addr[i], sizeof(WMI_IPV6_ADDR));
-			if(pHostOffloadParams->nsOffloadInfo.target_ipv6_addr_type[i])
-				ns_tuple->flags |= WMI_NSOFF_FLAGS_IS_IPV6_ANYCAST;
-			WMA_LOGD("Index %d NS solicitedIp: %pI6, targetIp: %pI6", i,
-				&pHostOffloadParams->nsOffloadInfo.selfIPv6Addr[i],
-				&pHostOffloadParams->nsOffloadInfo.targetIPv6Addr[i]);
-
-			/* target MAC is optional, check if it is valid, if this is not valid,
-			* the target will use the known local MAC address rather than the tuple */
-			WMI_CHAR_ARRAY_TO_MAC_ADDR(pHostOffloadParams->nsOffloadInfo.selfMacAddr,
-					&ns_tuple->target_mac);
-#endif
-			if ((ns_tuple->target_mac.mac_addr31to0 != 0) ||
-				(ns_tuple->target_mac.mac_addr47to32 != 0))
-			{
-				ns_tuple->flags |= WMI_NSOFF_FLAGS_MAC_VALID;
-			}
-		}
-	        buf_ptr += sizeof(WMI_NS_OFFLOAD_TUPLE);
-	}
-
-	WMITLV_SET_HDR(buf_ptr,WMITLV_TAG_ARRAY_STRUC,(WMI_MAX_ARP_OFFLOADS*sizeof(WMI_ARP_OFFLOAD_TUPLE)));
-	buf_ptr += WMI_TLV_HDR_SIZE;
-	for(i = 0; i < WMI_MAX_ARP_OFFLOADS; i++){
-		arp_tuple = (WMI_ARP_OFFLOAD_TUPLE *)buf_ptr;
-		WMITLV_SET_HDR(&arp_tuple->tlv_header,
-				WMITLV_TAG_STRUC_WMI_ARP_OFFLOAD_TUPLE,
-				WMITLV_GET_STRUCT_TLVLEN(WMI_ARP_OFFLOAD_TUPLE));
-
-		/* Fill data for ARP and NS in the first tupple for LA */
-		if ((wma->mArpInfo.enableOrDisable & SIR_OFFLOAD_ENABLE) && (i==0)) {
-			/*Copy the target ip addr and flags*/
-			arp_tuple->flags = WMI_ARPOFF_FLAGS_VALID;
-			A_MEMCPY(&arp_tuple->target_ipaddr,wma->mArpInfo.params.hostIpv4Addr,
-						SIR_IPV4_ADDR_LEN);
-			WMA_LOGD("ARPOffload IP4 address: %pI4",
-					wma->mArpInfo.params.hostIpv4Addr);
-		}
-		buf_ptr += sizeof(WMI_ARP_OFFLOAD_TUPLE);
-	}
-
-	/* Populate extended NS offload tuples */
-	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
-					(num_ns_ext_tuples*sizeof(WMI_NS_OFFLOAD_TUPLE)));
-	buf_ptr += WMI_TLV_HDR_SIZE;
-
-	if (num_ns_ext_tuples) {
-		for(i = WMI_MAX_NS_OFFLOADS; i < count; i++ ){
-			ns_tuple = (WMI_NS_OFFLOAD_TUPLE *)buf_ptr;
-			WMITLV_SET_HDR(&ns_tuple->tlv_header,
-				WMITLV_TAG_STRUC_WMI_NS_OFFLOAD_TUPLE,
-				(sizeof(WMI_NS_OFFLOAD_TUPLE)-WMI_TLV_HDR_SIZE));
-
-			/* Fill data only for NS offload in the first ARP tuple for LA */
-			if (!bArpOnly  &&
-				((pHostOffloadParams->enableOrDisable & SIR_OFFLOAD_ENABLE))) {
-				ns_tuple->flags |= WMI_NSOFF_FLAGS_VALID;
-#ifdef WLAN_NS_OFFLOAD
-				/*Copy the target/solicitation/remote ip addr */
-				if(pHostOffloadParams->nsOffloadInfo.targetIPv6AddrValid[i])
-					A_MEMCPY(&ns_tuple->target_ipaddr[0],
-						&pHostOffloadParams->nsOffloadInfo.targetIPv6Addr[i],
-						sizeof(WMI_IPV6_ADDR));
-				A_MEMCPY(&ns_tuple->solicitation_ipaddr,
-					&pHostOffloadParams->nsOffloadInfo.selfIPv6Addr[i],
-					sizeof(WMI_IPV6_ADDR));
-				if(pHostOffloadParams->nsOffloadInfo.target_ipv6_addr_type[i])
-					ns_tuple->flags |= WMI_NSOFF_FLAGS_IS_IPV6_ANYCAST;
-				WMA_LOGD("Index %d NS solicitedIp: %pI6, targetIp: %pI6", i,
-					&pHostOffloadParams->nsOffloadInfo.selfIPv6Addr[i],
-					&pHostOffloadParams->nsOffloadInfo.targetIPv6Addr[i]);
-
-				/* target MAC is optional, check if it is valid, if this is not valid,
-				 * the target will use the known local MAC address rather than the tuple */
-				 WMI_CHAR_ARRAY_TO_MAC_ADDR(pHostOffloadParams->nsOffloadInfo.selfMacAddr,
-					&ns_tuple->target_mac);
-#endif
-				if ((ns_tuple->target_mac.mac_addr31to0 != 0) ||
-					(ns_tuple->target_mac.mac_addr47to32 != 0)) {
-					ns_tuple->flags |= WMI_NSOFF_FLAGS_MAC_VALID;
-				}
-			}
-			buf_ptr += sizeof(WMI_NS_OFFLOAD_TUPLE);
-		}
-	}
-
-	res = wmi_unified_cmd_send(wma->wmi_handle, buf, len, WMI_SET_ARP_NS_OFFLOAD_CMDID);
-	if(res) {
+	res = wmi_unified_cmd_send(wma->wmi_handle, buf, len,
+				WMI_SET_ARP_NS_OFFLOAD_CMDID);
+	if (res) {
 		WMA_LOGE("Failed to enable ARP NDP/NSffload");
-		wmi_buf_free(buf);
-		vos_mem_free(pHostOffloadParams);
-		return VOS_STATUS_E_FAILURE;
+		goto err_cmd_send;
 	}
 
-	vos_mem_free(pHostOffloadParams);
-	return VOS_STATUS_SUCCESS;
+	if (config_arp) {
+		vos_mem_copy(&wma->interfaces[vdev_id].arp_offload_req,
+			hostoffloadreq, sizeof(tSirHostOffloadReq));
+	} else {
+		vos_mem_copy(&wma->interfaces[vdev_id].ns_offload_req,
+			hostoffloadreq, sizeof(tSirHostOffloadReq));
+	}
+
+	vos_mem_free(hostoffloadreq);
+	return status;
+err_cmd_send:
+	wmi_buf_free(buf);
+err_vdev:
+	vos_mem_free(hostoffloadreq);
+	return status;
 }
 
 typedef struct {

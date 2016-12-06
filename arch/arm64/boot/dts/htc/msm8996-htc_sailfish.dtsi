@@ -15,10 +15,11 @@
 #include "msm8996-touch-s1.dtsi"
 
 &qusb_phy0 {
-	qcom,qusb-phy-init-seq = <0xE8 0x80
-				0x23 0x84
-				0x81 0x88
+	qcom,qusb-phy-init-seq = <0xA8 0x80
+				0x63 0x84
+				0x83 0x88
 				0xC0 0x8C
+				0x03 0x90
 				0x30 0x08
 				0x79 0x0C
 				0x21 0x10
@@ -56,6 +57,7 @@
         qcom,ext-sense-type = <1>;
         qcom,cold-hot-jeita-hysteresis = <20 30>;
         qcom,fg-cutoff-voltage-mv = <3250>;
+        qcom,irq-volt-empty-mv = <3050>;
         /delete-property/ qcom,capacity-learning-feedback;
 };
 
