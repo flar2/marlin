@@ -52,7 +52,7 @@
 #define SWEEP_Y_START		1066
 #define SWEEP_X_START		720
 #define SWEEP_X_FINAL           360
-#define SWEEP_Y_NEXT            180
+#define SWEEP_Y_NEXT            300
 
 /* sailfish */
 #define SWEEP_Y_MAX_SAILFISH	1920
@@ -89,8 +89,10 @@ static struct input_dev *gesture_dev;
 
 /* Resources */
 int s2w_switch = S2W_DEFAULT;
-int s2w_switch_temp; 
-bool dt2w_switch;
+bool dt2w_switch = false;
+bool wg_switch = false;
+bool wg_switch_temp = false;
+bool wg_changed = false;
 static int s2s_switch = S2S_DEFAULT;
 static int touch_x = 0, touch_y = 0;
 static bool touch_x_called = false, touch_y_called = false;
@@ -468,7 +470,7 @@ static void s2w_input_callback(struct work_struct *unused)
 static void dt2w_input_callback(struct work_struct *unused)
 {
 
-	if (scr_suspended() && s2w_switch > 0 && dt2w_switch)
+	if (scr_suspended() && dt2w_switch)
 		detect_doubletap2wake(touch_x, touch_y, true);
 	return;
 }
@@ -582,6 +584,15 @@ static struct input_handler wg_input_handler = {
 	.id_table	= wg_ids,
 };
 
+static void wake_gesture_changed(void)
+{
+	wg_switch_temp = (s2w_switch || dt2w_switch);
+
+	if (!scr_suspended())
+		wg_switch = wg_switch_temp;
+	else
+		wg_changed = true;
+}
 
 /*
  * SYSFS stuff below here
@@ -599,18 +610,11 @@ static ssize_t sweep2wake_show(struct device *dev,
 static ssize_t sweep2wake_dump(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
-	sscanf(buf, "%d ", &s2w_switch_temp);
-	if (s2w_switch_temp < 0 || s2w_switch_temp > 15)
-		s2w_switch_temp = 0;
+	sscanf(buf, "%d ", &s2w_switch);
+	if (s2w_switch < 0 || s2w_switch > 15)
+		s2w_switch = 0;
 		
-	if (s2w_switch_temp == 0)
-		set_internal_dt(dt2w_switch);
-	else {
-		set_internal_dt(false);
-	}
-
-	if (!scr_suspended())
-		s2w_switch = s2w_switch_temp;
+	wake_gesture_changed();
 
 	return count;
 }
@@ -658,10 +662,8 @@ static ssize_t doubletap2wake_dump(struct device *dev,
 	if (input < 0 || input > 1)
 		input = 0;	
 
-	dt2w_switch = (input) ? true : false;		
-	
-	if (s2w_switch == 0 || s2w_switch_temp == 0)
-		set_internal_dt(dt2w_switch);
+	dt2w_switch = (input) ? true : false;
+	wake_gesture_changed();
 
 	return count;
 }
@@ -741,8 +743,6 @@ static int __init wake_gestures_init(void)
 	INIT_WORK(&dt2w_input_work, dt2w_input_callback);
 		
 	wake_lock_init(&dt2w_wakelock, WAKE_LOCK_SUSPEND, "dt2w_wakelock");
-		
-	//dt2w_switch = get_internal_dt();
 		
 #if (WAKE_GESTURES_ENABLED)
 	gesture_dev = input_allocate_device();
