@@ -52,7 +52,7 @@
 #define SWEEP_Y_START		1066
 #define SWEEP_X_START		720
 #define SWEEP_X_FINAL           360
-#define SWEEP_Y_NEXT            300
+#define SWEEP_Y_NEXT            240
 
 /* sailfish */
 #define SWEEP_Y_MAX_SAILFISH	1920
