@@ -890,13 +890,11 @@ static int msm_ispif_reconfig(struct ispif_device *ispif,
 		rc = msm_ispif_reset(ispif);
 	if (!rc)
 		rc = msm_ispif_config(ispif, params);
-	if (!rc)
-		rc = msm_ispif_start_frame_boundary(ispif, params);
 
 	if (!rc)
-		pr_info("ISPIF restart Successful\n");
+		pr_info("ISPIF reconfig Successful\n");
 	else
-		pr_info("ISPIF restart Failed\n");
+		pr_info("ISPIF reconfig Failed\n");
 
 	return rc;
 }
