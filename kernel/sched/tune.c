@@ -15,7 +15,7 @@
 static bool schedtune_initialized = false;
 #endif
 
-unsigned int sysctl_sched_cfs_boost __read_mostly;
+int sysctl_sched_cfs_boost __read_mostly;
 
 extern struct target_nrg schedtune_target_nrg;
 
@@ -236,7 +236,7 @@ struct boost_groups {
 };
 
 /* Boost groups affecting each CPU in the system */
-DEFINE_PER_CPU(struct boost_groups, cpu_boost_groups);
+static DEFINE_PER_CPU(struct boost_groups, cpu_boost_groups);
 
 static void
 schedtune_cpu_update(int cpu)
@@ -737,6 +737,7 @@ schedtune_init_cgroups(void)
 	for_each_possible_cpu(cpu) {
 		bg = &per_cpu(cpu_boost_groups, cpu);
 		memset(bg, 0, sizeof(struct boost_groups));
+		raw_spin_lock_init(&bg->lock);
 	}
 
 	pr_info("schedtune: configured to support %d boost groups\n",
