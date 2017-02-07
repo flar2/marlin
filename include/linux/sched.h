@@ -889,8 +889,7 @@ struct sched_capacity_reqs {
 #define SD_BALANCE_FORK		0x0008	/* Balance on fork, clone */
 #define SD_BALANCE_WAKE		0x0010  /* Balance on wakeup */
 #define SD_WAKE_AFFINE		0x0020	/* Wake task to waking CPU */
-#define SD_ASYM_CPUCAPACITY	0x0040  /* Groups have different max cpu capacities */
-#define SD_SHARE_CPUCAPACITY	0x0080	/* Domain members share cpu capacity */
+#define SD_SHARE_CPUCAPACITY	0x0080	/* Domain members share cpu power */
 #define SD_SHARE_POWERDOMAIN	0x0100	/* Domain members share power domain */
 #define SD_SHARE_PKG_RESOURCES	0x0200	/* Domain members share cpu pkg resources */
 #define SD_SERIALIZE		0x0400	/* Only a single load balancing instance */
@@ -1135,7 +1134,7 @@ struct load_weight {
 struct sched_avg {
 	u64 last_update_time, load_sum;
 	u32 util_sum, period_contrib;
-	unsigned long load_avg, util_avg;
+	unsigned long load_avg, util_avg, util_est;
 };
 
 #ifdef CONFIG_SCHEDSTATS
@@ -3163,20 +3162,5 @@ struct cpu_cycle_counter_cb {
 	u32 (*get_cpu_cycles_max_per_us)(int cpu);
 };
 int register_cpu_cycle_counter_cb(struct cpu_cycle_counter_cb *cb);
-
-#define SCHED_CPUFREQ_RT        (1U << 0)
-#define SCHED_CPUFREQ_DL        (1U << 1)
-#define SCHED_CPUFREQ_IOWAIT    (1U << 2)
-
-#ifdef CONFIG_CPU_FREQ
-struct update_util_data {
-	void (*func)(struct update_util_data *data, u64 time, unsigned int flags);
-};
-
-void cpufreq_add_update_util_hook(int cpu, struct update_util_data *data,
-                       void (*func)(struct update_util_data *data, u64 time,
-                                    unsigned int flags));
-void cpufreq_remove_update_util_hook(int cpu);
-#endif /* CONFIG_CPU_FREQ */
 
 #endif
