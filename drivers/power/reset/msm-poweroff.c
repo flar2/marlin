@@ -375,10 +375,12 @@ static void msm_restart_prepare(const char *cmd)
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_RTC);
 			set_restart_action(RESTART_REASON_ALARM, "Alarm");
+#if 0
 		} else if (!strcmp(cmd, "dm-verity device corrupted")) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_DMVERITY_CORRUPTED);
 			set_restart_action(RESTART_REASON_DM_VERITY_DEVICE_CORRUPTED, "DM verity device corrupted");
+#endif
 		} else if (!strcmp(cmd, "dm-verity enforcing")) {
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_DMVERITY_ENFORCE);
