@@ -1348,7 +1348,7 @@ static ssize_t qpnp_hap_voltage_level_show(struct device *dev,
 static ssize_t qpnp_hap_voltage_level_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
-	struct timed_output_dev *timed_dev = dev_get_drvdata(dev);
+	/*struct timed_output_dev *timed_dev = dev_get_drvdata(dev);
 	struct qpnp_hap *hap = container_of(timed_dev, struct qpnp_hap,
 					 timed_dev);
 	int input, rc = 0;
@@ -1358,7 +1358,7 @@ static ssize_t qpnp_hap_voltage_level_store(struct device *dev,
 
 	rc = qpnp_hap_vmax_config(hap);
 	if (rc < 0)
-		VIB_ERR_LOG("qpnp_hap_vmax_config set failed(%d)", rc);
+		VIB_ERR_LOG("qpnp_hap_vmax_config set failed(%d)", rc);*/
 
 	return count;
 }
