@@ -527,6 +527,11 @@ static int msm_comm_vote_bus(struct msm_vidc_core *core)
 			inst->fmts[CAPTURE_PORT]->fourcc :
 			inst->fmts[OUTPUT_PORT]->fourcc;
 
+		if (!msm_comm_get_inst_load(inst, LOAD_CALC_NO_QUIRKS)) {
+			--vote_data_count;
+			continue;
+		}
+
 		vote_data[i].domain = get_hal_domain(inst->session_type);
 		vote_data[i].codec = get_hal_codec(codec);
 		vote_data[i].width =  max(inst->prop.width[CAPTURE_PORT],
@@ -567,8 +572,8 @@ static int msm_comm_vote_bus(struct msm_vidc_core *core)
 	}
 	mutex_unlock(&core->lock);
 
-	rc = call_hfi_op(hdev, vote_bus, hdev->hfi_device_data, vote_data,
-			vote_data_count);
+	rc = call_hfi_op(hdev, vote_bus, hdev->hfi_device_data,
+			vote_data_count ? vote_data : NULL, vote_data_count);
 	if (rc)
 		dprintk(VIDC_ERR, "Failed to scale bus: %d\n", rc);
 
@@ -1193,12 +1198,14 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 	 * ptr[2] = flag to indicate bit depth or/and pic struct changed
 	 * ptr[3] = bit depth
 	 * ptr[4] = pic struct (progressive or interlaced)
+	 * ptr[5] = colour space
 	 */
 
 	ptr = (u32 *)seq_changed_event.u.data;
 	ptr[2] = 0x0;
 	ptr[3] = inst->bit_depth;
 	ptr[4] = inst->pic_struct;
+	ptr[5] = inst->colour_space;
 
 	if (inst->bit_depth != event_notify->bit_depth) {
 		inst->bit_depth = event_notify->bit_depth;
@@ -1206,7 +1213,7 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 		ptr[3] = inst->bit_depth;
 		event = V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT;
 		dprintk(VIDC_DBG,
-			"V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT due to bit-depth change\n");
+				"V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT due to bit-depth change\n");
 	}
 
 	if (inst->pic_struct != event_notify->pic_struct) {
@@ -1215,7 +1222,18 @@ static void handle_event_change(enum hal_command_response cmd, void *data)
 		ptr[2] |= V4L2_EVENT_PICSTRUCT_FLAG;
 		ptr[4] = inst->pic_struct;
 		dprintk(VIDC_DBG,
-			"V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT due to pic-struct change\n");
+				"V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT due to pic-struct change\n");
+	}
+
+	if (inst->bit_depth == MSM_VIDC_BIT_DEPTH_10
+		&& inst->colour_space !=
+		event_notify->colour_space) {
+		inst->colour_space = event_notify->colour_space;
+		event = V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT;
+		ptr[2] |= V4L2_EVENT_COLOUR_SPACE_FLAG;
+		ptr[5] = inst->colour_space;
+		dprintk(VIDC_DBG,
+				"V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT due to colour space change\n");
 	}
 
 	if (event == V4L2_EVENT_SEQ_CHANGED_INSUFFICIENT) {
@@ -2591,11 +2609,6 @@ static int msm_vidc_deinit_core(struct msm_vidc_inst *inst)
 				core->id, core->state);
 		goto core_already_uninited;
 	}
-	mutex_unlock(&core->lock);
-
-	msm_comm_scale_clocks_and_bus(inst);
-
-	mutex_lock(&core->lock);
 
 	if (!core->resources.never_unload_fw) {
 		cancel_delayed_work(&core->fw_unload_work);

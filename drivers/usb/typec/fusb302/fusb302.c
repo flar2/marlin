@@ -95,6 +95,16 @@ static const u8 rd_mda_value[] = {
 	[SRC_CURRENT_HIGH] = 61,	/* 2604mV */
 };
 
+enum pdo_role {
+	SNK_PDO,
+	SRC_PDO,
+};
+
+static const char * const pdo_prop_name[] = {
+	[SNK_PDO]	= "snk-pdo",
+	[SRC_PDO]	= "src-pdo",
+};
+
 struct fusb302_chip {
 	struct device *dev;
 	struct i2c_client *i2c_client;
@@ -136,6 +146,8 @@ struct fusb302_chip {
 	enum typec_cc_polarity cc_polarity;
 	enum typec_cc_status cc1;
 	enum typec_cc_status cc2;
+	/* Local pin status */
+	enum typec_cc_status cc;
 
 	struct usb_controller *uc;
 	struct usb_typec_ctrl *utc;
@@ -577,6 +589,19 @@ static int tcpm_set_cc(struct tcpc_dev *dev, enum typec_cc_status cc)
 	u8 rd_mda;
 
 	mutex_lock(&chip->lock);
+
+	if ((chip->cc == TYPEC_CC_RP_DEF || chip->cc == TYPEC_CC_RP_1_5 ||
+	     chip->cc == TYPEC_CC_RP_3_0) && (cc == TYPEC_CC_RP_DEF ||
+	     cc == TYPEC_CC_RP_1_5 || cc == TYPEC_CC_RP_3_0)) {
+		ret = fusb302_set_src_current(chip, cc_src_current[cc]);
+		if (ret < 0) {
+			fusb302_log("cannot set src current %s, ret=%d\n",
+				    typec_cc_status_name[cc], ret);
+			goto done;
+		}
+		goto rp_switch;
+	}
+
 	switch (cc) {
 	case TYPEC_CC_OPEN:
 		pull_up = false;
@@ -685,7 +710,9 @@ static int tcpm_set_cc(struct tcpc_dev *dev, enum typec_cc_status cc)
 		chip->intr_bc_lvl = true;
 		chip->intr_comp_chng = false;
 	}
+rp_switch:
 	fusb302_log("cc := %s\n", typec_cc_status_name[cc]);
+	chip->cc = cc;
 done:
 	mutex_unlock(&chip->lock);
 
@@ -1298,33 +1325,138 @@ done:
 #define PDO_FIXED_FLAGS \
 	(PDO_FIXED_DUAL_ROLE | PDO_FIXED_DATA_SWAP | PDO_FIXED_USB_COMM)
 
-static const u32 src_pdo[] = {
-	PDO_FIXED(5000, 900, PDO_FIXED_FLAGS),
-};
-
-static const u32 snk_pdo[] = {
-	PDO_FIXED(5000, 3000, PDO_FIXED_FLAGS),
-	PDO_FIXED(9000, 2000, PDO_FIXED_FLAGS),
-	PDO_BATT(4000, 10000, 18000),
-};
-
-static const struct tcpc_config fusb302_tcpc_config = {
-	.src_pdo = src_pdo,
-	.nr_src_pdo = ARRAY_SIZE(src_pdo),
-	.snk_pdo = snk_pdo,
-	.nr_snk_pdo = ARRAY_SIZE(snk_pdo),
-	.max_snk_mv = 9000,
-	.max_snk_ma = 3000,
-	.max_snk_mw = 27000,
-	.operating_snk_mw = 2500,
-	.type = TYPEC_PORT_DRP,
-	.default_role = TYPEC_SINK,
-	.alt_modes = NULL,
-};
-
-static void init_tcpc_dev(struct tcpc_dev *fusb302_tcpc_dev)
+static u32 *parse_pdo(struct fusb302_chip *chip, enum pdo_role role,
+		      unsigned int *nr_pdo)
 {
-	fusb302_tcpc_dev->config = &fusb302_tcpc_config;
+	struct device *dev = chip->dev;
+	u32 *dt_array;
+	u32 *pdo;
+	int i, count, rc;
+
+	count = device_property_read_u32_array(dev, pdo_prop_name[role],
+					       NULL, 0);
+	if (count > 0) {
+		if (count % 4)
+			return ERR_PTR(-EINVAL);
+
+		*nr_pdo = count / 4;
+		dt_array = devm_kcalloc(dev, count, sizeof(*dt_array),
+					GFP_KERNEL);
+		if (!dt_array)
+			return ERR_PTR(-ENOMEM);
+
+		rc = device_property_read_u32_array(dev, pdo_prop_name[role],
+						    dt_array, count);
+		if (rc)
+			return ERR_PTR(rc);
+
+		pdo = devm_kcalloc(dev, *nr_pdo, sizeof(*pdo), GFP_KERNEL);
+		if (!pdo)
+			return ERR_PTR(-ENOMEM);
+
+		for (i = 0; i < *nr_pdo; i++) {
+			switch (dt_array[i * 4]) {
+			case PDO_TYPE_FIXED:
+				pdo[i] = PDO_FIXED(dt_array[i * 4 + 1],
+						   dt_array[i * 4 + 2],
+						   PDO_FIXED_FLAGS);
+				break;
+			case PDO_TYPE_BATT:
+				pdo[i] = PDO_BATT(dt_array[i * 4 + 1],
+						  dt_array[i * 4 + 2],
+						  dt_array[i * 4 + 3]);
+				break;
+			case PDO_TYPE_VAR:
+				pdo[i] = PDO_VAR(dt_array[i * 4 + 1],
+						 dt_array[i * 4 + 2],
+						 dt_array[i * 4 + 3]);
+				break;
+			/*case PDO_TYPE_AUG:*/
+			default:
+				return ERR_PTR(-EINVAL);
+			}
+		}
+		return pdo;
+	}
+
+	return ERR_PTR(-EINVAL);
+}
+
+static int init_tcpc_config(struct tcpc_dev *fusb302_tcpc_dev)
+{
+	struct fusb302_chip *chip = container_of(fusb302_tcpc_dev,
+						 struct fusb302_chip,
+						 tcpc_dev);
+	struct device *dev = chip->dev;
+	struct tcpc_config *config;
+	int ret;
+
+	fusb302_tcpc_dev->config = devm_kzalloc(dev, sizeof(*config),
+						GFP_KERNEL);
+	if (!fusb302_tcpc_dev->config)
+		return -ENOMEM;
+
+	config = fusb302_tcpc_dev->config;
+
+	ret = device_property_read_u32(dev, "port-type", &config->type);
+	if (ret < 0)
+		return ret;
+
+	switch (config->type) {
+	case TYPEC_PORT_UFP:
+		config->snk_pdo = parse_pdo(chip, SNK_PDO, &config->nr_snk_pdo);
+		if (IS_ERR(config->snk_pdo))
+			return PTR_ERR(config->snk_pdo);
+		break;
+	case TYPEC_PORT_DFP:
+		config->src_pdo = parse_pdo(chip, SRC_PDO, &config->nr_src_pdo);
+		if (IS_ERR(config->src_pdo))
+			return PTR_ERR(config->src_pdo);
+		break;
+	case TYPEC_PORT_DRP:
+		config->snk_pdo = parse_pdo(chip, SNK_PDO, &config->nr_snk_pdo);
+		if (IS_ERR(config->snk_pdo))
+			return PTR_ERR(config->snk_pdo);
+		config->src_pdo = parse_pdo(chip, SRC_PDO, &config->nr_src_pdo);
+		if (IS_ERR(config->src_pdo))
+			return PTR_ERR(config->src_pdo);
+
+		ret = device_property_read_u32(dev, "default-role",
+					       &config->default_role);
+		if (ret < 0)
+			return ret;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	if (config->type == TYPEC_PORT_UFP || config->type == TYPEC_PORT_DRP) {
+		ret = device_property_read_u32(dev, "max-snk-mv",
+					       &config->max_snk_mv);
+		ret = device_property_read_u32(dev, "max-snk-ma",
+					       &config->max_snk_ma);
+		ret = device_property_read_u32(dev, "max-snk-mw",
+					       &config->max_snk_mw);
+		ret = device_property_read_u32(dev, "op-snk-mw",
+					       &config->operating_snk_mw);
+		if (ret < 0)
+			return ret;
+	}
+
+	/* TODO: parse alt mode from DT */
+	config->alt_modes = NULL;
+
+	return 0;
+}
+
+static int init_tcpc_dev(struct tcpc_dev *fusb302_tcpc_dev)
+{
+	int ret;
+
+	ret = init_tcpc_config(fusb302_tcpc_dev);
+	if (ret < 0)
+		return ret;
+
 	fusb302_tcpc_dev->init = tcpm_init;
 	fusb302_tcpc_dev->get_vbus = tcpm_get_vbus;
 	fusb302_tcpc_dev->set_cc = tcpm_set_cc;
@@ -1338,6 +1470,7 @@ static void init_tcpc_dev(struct tcpc_dev *fusb302_tcpc_dev)
 	fusb302_tcpc_dev->start_drp_toggling = tcpm_start_drp_toggling;
 	fusb302_tcpc_dev->pd_transmit = tcpm_pd_transmit;
 	fusb302_tcpc_dev->mux = NULL;
+	return 0;
 }
 
 #define VDD_3P3_VOL_MIN		3000000	/* uV */
@@ -1940,8 +2073,10 @@ static int fusb302_probe(struct i2c_client *client,
 		return -ENOMEM;
 	INIT_DELAYED_WORK(&chip->bc_lvl_handler, fusb302_bc_lvl_handler_work);
 	INIT_WORK(&chip->set_current_limit, fusb302_set_current_limit);
-	init_tcpc_dev(&chip->tcpc_dev);
 
+	ret = init_tcpc_dev(&chip->tcpc_dev);
+	if (ret < 0)
+		return ret;
 	ret = init_regulators(chip);
 	if (ret < 0)
 		return ret;
