@@ -1397,7 +1397,7 @@ static ssize_t qpnp_hap_voltage_level_store(struct device *dev,
 	input = simple_strtoul(buf, NULL, 10);
 	hap->vmax_mv = input;
 
-	rc = qpnp_hap_vmax_config(hap);
+	//rc = qpnp_hap_vmax_config(hap);
 	if (rc < 0)
 		VIB_ERR_LOG("qpnp_hap_vmax_config set failed(%d)", rc);
 
