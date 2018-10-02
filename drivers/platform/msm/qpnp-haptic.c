@@ -1123,6 +1123,47 @@ static ssize_t qpnp_hap_vmax_light_mv_store(struct device *dev,
 	return count;
 }
 
+/* sysfs show for custom vibration */
+static ssize_t qpnp_hap_vib_strength_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct timed_output_dev *timed_dev = dev_get_drvdata(dev);
+	struct qpnp_hap *hap = container_of(timed_dev, struct qpnp_hap,
+					 timed_dev);
+	u32 val;
+
+	val = ((hap->vmax_light_mv) * 100) / QPNP_HAP_VMAX_MAX_MV;
+
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", val);
+}
+
+/* sysfs store for custom vibration */
+static ssize_t qpnp_hap_vib_strength_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct timed_output_dev *timed_dev = dev_get_drvdata(dev);
+	struct qpnp_hap *hap = container_of(timed_dev, struct qpnp_hap,
+					 timed_dev);
+	u32 val, new_val;
+	ssize_t ret;
+
+	ret = kstrtou32(buf, 10, &val);
+	if (ret)
+		return ret;
+
+	if ((val < 0) || (val > 100))
+		return -EINVAL;
+
+	new_val = ((val) * QPNP_HAP_VMAX_MAX_MV) / 100;
+
+	mutex_lock(&hap->wf_lock);
+	hap->vmax_light_mv = new_val;
+	mutex_unlock(&hap->wf_lock);
+
+	return count;
+}
+
 /* sysfs show for wave form update */
 static ssize_t qpnp_hap_wf_update_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -1514,6 +1555,9 @@ static struct device_attribute qpnp_hap_attrs[] = {
 	__ATTR(vmax_light_mv, (S_IRUGO | S_IWUSR | S_IWGRP),
 			qpnp_hap_vmax_light_mv_show,
 			qpnp_hap_vmax_light_mv_store),
+	__ATTR(vib_strength, (S_IRUGO | S_IWUSR | S_IWGRP),
+			qpnp_hap_vib_strength_show,
+			qpnp_hap_vib_strength_store),
 };
 
 static void calculate_lra_code(struct qpnp_hap *hap)
