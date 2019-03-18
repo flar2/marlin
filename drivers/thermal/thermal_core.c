@@ -41,7 +41,7 @@
 #include <net/genetlink.h>
 #include <linux/kobject.h>
 #include <linux/suspend.h>
-#include <../base/base.h>
+#include "../base/base.h"
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/thermal.h>
