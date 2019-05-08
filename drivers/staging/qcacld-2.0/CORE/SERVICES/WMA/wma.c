@@ -14226,7 +14226,7 @@ static int32_t wma_txrx_fw_stats_reset(tp_wma_handle wma_handle,
 	}
 	vos_mem_zero(&req, sizeof(req));
 	req.stats_type_reset_mask = value;
-	ol_txrx_fw_stats_get(vdev, &req);
+	ol_txrx_fw_stats_get(vdev, &req, false);
 
 	return 0;
 }
@@ -14299,7 +14299,7 @@ static int32_t wma_set_txrx_fw_stats_level(tp_wma_handle wma_handle,
 			value);
 		return -EINVAL;
 	}
-	ol_txrx_fw_stats_get(vdev, &req);
+	ol_txrx_fw_stats_get(vdev, &req, true);
 
 	return 0;
 }
@@ -27435,7 +27435,7 @@ VOS_STATUS wma_stats_ext_req(void *wda_handle,
 	tp_wma_handle wma = (tp_wma_handle)wda_handle;
 	wmi_req_stats_ext_cmd_fixed_param *cmd;
 	wmi_buf_t buf;
-	u_int16_t len;
+	size_t len;
 	u_int8_t *buf_ptr;
 
 	len = sizeof(*cmd) + WMI_TLV_HDR_SIZE +
@@ -28939,6 +28939,18 @@ static VOS_STATUS wma_nan_req(void *wda_handle, tpNanRequest nan_req)
 	nan_data_len = nan_req->request_data_len;
 	nan_data_len_aligned = roundup(nan_req->request_data_len,
 				sizeof(u_int32_t));
+	if (nan_data_len_aligned < nan_req->request_data_len) {
+		WMA_LOGE("%s: integer overflow while rounding up data_len",
+			 __func__);
+		return VOS_STATUS_E_NOMEM;
+	}
+
+	if (nan_data_len_aligned > WMA_SVC_MSG_MAX_SIZE - WMI_TLV_HDR_SIZE) {
+		WMA_LOGE("%s: wmi_max_msg_size overflow for given datalen",
+			 __func__);
+		return VOS_STATUS_E_NOMEM;
+	}
+
 	len += WMI_TLV_HDR_SIZE + nan_data_len_aligned;
 	buf = wmi_buf_alloc(wma_handle->wmi_handle, len);
 	if (!buf) {
@@ -33198,7 +33210,10 @@ int wma_scpc_event_handler(void *handle, u_int8_t *event_buf, u_int32_t len)
 	param_buf = (WMI_PDEV_UTF_SCPC_EVENTID_param_tlvs *)event_buf;
 	scpc_event = param_buf->fixed_param;
 	length = len - sizeof(wmi_scpc_event_fixed_param);
-
+	if (length < sizeof(u_int32_t)) {
+		WMA_LOGE("%s: invalid length", __func__);
+		return -EINVAL;
+	}
 
 	buf = (u_int8_t *)scpc_event + sizeof(wmi_scpc_event_fixed_param);
 
@@ -33207,21 +33222,30 @@ int wma_scpc_event_handler(void *handle, u_int8_t *event_buf, u_int32_t len)
 
 	/* skip the tag */
 	buf += sizeof(u_int32_t);
+	length -= sizeof(u_int32_t);
+	if (length < sizeof(struct _bd)) {
+		WMA_LOGE("%s: invalid length", __func__);
+		return -EINVAL;
+	}
+
 
 	i = n = 0;
-	bd_data = (struct _bd *)&buf[n];
-	n += roundup((sizeof(struct _bd) + bd_data->length), 4);
 
-	while ((n < length) && (i < scpc_event->num_patch)) {
+	while ((n <= length - sizeof(struct _bd)) && (i < scpc_event->num_patch)) {
 		bd_data = (struct _bd *)&buf[n];
 
 		WMA_LOGD("%s: board data patch%i, offset= %d, length= %d.\n",
 			__func__, i, bd_data->offset, bd_data->length);
+		if (bd_data->length > length - sizeof(struct _bd) - n)
+			break;
+
 		/* cache the data section */
 		vos_cache_boarddata(bd_data->offset,
-				bd_data->length, bd_data->data);
-
-		n += roundup((sizeof(struct _bd) + bd_data->length), 4);
+				    bd_data->length, bd_data->data);
+		len = roundup((sizeof(struct _bd) + bd_data->length), 4);
+		if (len > length - n)
+			break;
+		n += len;
 		i++;
 	}
 
